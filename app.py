@@ -99,21 +99,3 @@ def clean_temp():
         if os.stat(f).st_mtime < now - 3600:
             os.remove(f)
 clean_temp()
-st.markdown(
-    """
-    <style>
-    .stApp {
-        background-color: #f0f2f6;  /* Un gris azulado muy suave */
-    }
-    h1, h2, h3, p {
-        color: #1e293b; /* Texto azul oscuro casi negro para mejor contraste */
-    }
-    /* Estilo para el área de texto */
-    .stTextArea textarea {
-        background-color: #e8f5e9;
-        color: #000000;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True
-)
