@@ -5,3 +5,4 @@ elevenlabs
 gTTS
 Pillow
 PyPDF2
+langdetect
