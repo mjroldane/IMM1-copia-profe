@@ -2,94 +2,65 @@ import streamlit as st
 import os
 import time
 import glob
-import base64
 from gtts import gTTS
 from PIL import Image
-import PyPDF2  # Necesitarás instalarlo: pip install PyPDF2
+import PyPDF2
 
-# Configuración de la página para accesibilidad
-st.set_page_config(page_title="Lector de Documentos Accesible", layout="centered")
-
-st.title("🔊 Lector de Documentos para Asistencia Visual")
-
-# Carpeta temporal
+# Configuración inicial
 if not os.path.exists("temp"):
     os.makedirs("temp")
 
-# --- FUNCIONES DE APOYO ---
+st.title("🔊 Lector Multilingüe Accesible")
 
-def extraer_texto(archivo_subido):
-    """Extrae texto de archivos TXT o PDF."""
-    if archivo_subido.type == "text/plain":
-        return str(archivo_subido.read(), "utf-8")
-    elif archivo_subido.type == "application/pdf":
-        pdf_reader = PyPDF2.PdfReader(archivo_subido)
-        texto_completo = ""
-        for pagina in pdf_reader.pages:
-            texto_completo += pagina.extract_text()
-        return texto_completo
-    return None
-
-def text_to_speech(text, lang):
-    """Convierte texto a audio y lo guarda."""
-    tts = gTTS(text, lang=lang)
-    filename = f"temp/audio_{int(time.time())}.mp3"
-    tts.save(filename)
-    return filename
-
-# --- INTERFAZ ---
-
+# --- BARRA LATERAL PARA IDIOMAS ---
 with st.sidebar:
-    st.header("Configuración de Voz")
-    idioma = st.radio("Seleccione el idioma de lectura:", ("Español", "English"))
-    lg = 'es' if idioma == "Español" else 'en'
+    st.header("Configuración")
     
-    st.info("Esta herramienta permite subir archivos PDF o TXT para escucharlos en voz alta.")
+    # Añadimos Francés a las opciones
+    idioma_nombre = st.radio(
+        "Seleccione el idioma de lectura:",
+        ("Español", "English", "Français")
+    )
+    
+    # Diccionario de mapeo para gTTS
+    mapa_idiomas = {
+        "Español": "es",
+        "English": "en",
+        "Français": "fr"
+    }
+    lg = mapa_idiomas[idioma_nombre]
+    
+    st.write(f"Configurado en: **{idioma_nombre}**")
 
-# 1. Subida de archivos (Lo más útil para el usuario)
-st.subheader("1. Sube tu archivo")
-uploaded_file = st.file_uploader("Arrastra aquí tu PDF o archivo de texto", type=["pdf", "txt"])
+# --- LÓGICA DE CARGA ---
+st.subheader("1. Carga de contenido")
+uploaded_file = st.file_uploader("Sube un archivo (PDF o TXT)", type=["pdf", "txt"])
+text_input = st.text_area("O pega el texto aquí:", height=150)
 
-# 2. Área de texto (Por si prefieren escribir)
-st.subheader("2. O escribe el texto directamente")
-text_input = st.text_area("Caja de texto:", height=200, placeholder="Escribe o pega algo aquí...")
-
-# Determinar qué texto procesar
+# Extraer texto si hay archivo
 final_text = ""
-if uploaded_file is not None:
-    final_text = extraer_texto(uploaded_file)
-    st.success("Archivo cargado con éxito.")
+if uploaded_file:
+    if uploaded_file.type == "text/plain":
+        final_text = str(uploaded_file.read(), "utf-8")
+    else:
+        pdf_reader = PyPDF2.PdfReader(uploaded_file)
+        for page in pdf_reader.pages:
+            final_text += page.extract_text()
 elif text_input:
     final_text = text_input
 
-# 3. Botón de Procesamiento
-if st.button("🔊 CONVERTIR Y ESCUCHAR", use_container_width=True):
-    if final_text.strip() == "":
-        st.warning("Por favor, sube un archivo o escribe algún texto primero.")
+# --- BOTÓN DE ACCIÓN ---
+if st.button("🔊 GENERAR AUDIO", use_container_width=True):
+    if final_text.strip():
+        with st.spinner(f"Generando voz en {idioma_nombre}..."):
+            # Generar audio
+            tts = gTTS(final_text, lang=lg)
+            nombre_archivo = f"temp/audio_{lg}_{int(time.time())}.mp3"
+            tts.save(nombre_archivo)
+            
+            # Reproducción
+            st.success(f"¡Listo! Audio generado en {idioma_nombre}")
+            with open(nombre_archivo, "rb") as f:
+                st.audio(f.read(), format="audio/mp3")
     else:
-        with st.spinner("Generando audio... por favor espera."):
-            archivo_audio = text_to_speech(final_text, lg)
-            
-            # Reproductor de audio
-            st.markdown("### Tu audio listo:")
-            with open(archivo_audio, "rb") as f:
-                audio_bytes = f.read()
-            st.audio(audio_bytes, format="audio/mp3")
-            
-            # Botón de descarga
-            st.download_button(
-                label="Descargar archivo de audio",
-                data=audio_bytes,
-                file_name="lectura_asistida.mp3",
-                mime="audio/mp3"
-            )
-
-# Limpieza de archivos antiguos
-def remove_old_files(n_days=1):
-    mp3_files = glob.glob("temp/*.mp3")
-    now = time.time()
-    for f in mp3_files:
-        if os.stat(f).st_mtime < now - (n_days * 86400):
-            os.remove(f)
-
-remove_old_files()
+        st.error("Por favor, ingresa texto o sube un archivo primero.")
