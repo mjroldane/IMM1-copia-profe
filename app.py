@@ -3,41 +3,36 @@ import os
 import time
 import glob
 from gtts import gTTS
+from langdetect import detect, DetectorFactory
 from PIL import Image
 import PyPDF2
 
-# Configuración inicial
+# Para que los resultados de detección sean consistentes
+DetectorFactory.seed = 0
+
 if not os.path.exists("temp"):
     os.makedirs("temp")
 
-st.title("🔊 Lector Multilingüe Accesible")
+st.title("🔊 Lector Inteligente Accesible")
 
-# --- BARRA LATERAL PARA IDIOMAS ---
 with st.sidebar:
-    st.header("Configuración")
-    
-    # Añadimos Francés a las opciones
-    idioma_nombre = st.radio(
-        "Seleccione el idioma de lectura:",
-        ("Español", "English", "Français")
+    st.header("Configuración de Voz")
+    # Añadimos la opción de Autodetectar
+    modo = st.selectbox(
+        "Idioma de lectura:",
+        ["Autodetectar", "Español", "English", "Français"]
     )
     
-    # Diccionario de mapeo para gTTS
     mapa_idiomas = {
         "Español": "es",
         "English": "en",
         "Français": "fr"
     }
-    lg = mapa_idiomas[idioma_nombre]
-    
-    st.write(f"Configurado en: **{idioma_nombre}**")
 
-# --- LÓGICA DE CARGA ---
-st.subheader("1. Carga de contenido")
-uploaded_file = st.file_uploader("Sube un archivo (PDF o TXT)", type=["pdf", "txt"])
+# --- ENTRADA DE DATOS ---
+uploaded_file = st.file_uploader("Sube un PDF o TXT", type=["pdf", "txt"])
 text_input = st.text_area("O pega el texto aquí:", height=150)
 
-# Extraer texto si hay archivo
 final_text = ""
 if uploaded_file:
     if uploaded_file.type == "text/plain":
@@ -49,18 +44,38 @@ if uploaded_file:
 elif text_input:
     final_text = text_input
 
-# --- BOTÓN DE ACCIÓN ---
+# --- PROCESAMIENTO ---
 if st.button("🔊 GENERAR AUDIO", use_container_width=True):
     if final_text.strip():
-        with st.spinner(f"Generando voz en {idioma_nombre}..."):
-            # Generar audio
+        # Lógica de detección de idioma
+        if modo == "Autodetectar":
+            try:
+                lang_detected = detect(final_text)
+                # Validamos que el idioma detectado esté soportado por nuestra app
+                lg = lang_detected if lang_detected in ['es', 'en', 'fr'] else 'es'
+                nombre_idioma = "detectado automáticamente"
+            except:
+                lg = 'es'
+                nombre_idioma = "por defecto (Español)"
+        else:
+            lg = mapa_idiomas[modo]
+            nombre_idioma = modo
+
+        with st.spinner(f"Procesando en idioma {nombre_idioma}..."):
             tts = gTTS(final_text, lang=lg)
-            nombre_archivo = f"temp/audio_{lg}_{int(time.time())}.mp3"
+            nombre_archivo = f"temp/audio_{int(time.time())}.mp3"
             tts.save(nombre_archivo)
             
-            # Reproducción
-            st.success(f"¡Listo! Audio generado en {idioma_nombre}")
+            st.success(f"Audio listo (Idioma: {lg})")
             with open(nombre_archivo, "rb") as f:
                 st.audio(f.read(), format="audio/mp3")
     else:
-        st.error("Por favor, ingresa texto o sube un archivo primero.")
+        st.error("No hay texto para leer.")
+
+# Limpieza básica
+def clean_temp():
+    files = glob.glob("temp/*.mp3")
+    for f in files:
+        if os.stat(f).st_mtime < time.time() - 3600: # Borra archivos de más de 1 hora
+            os.remove(f)
+clean_temp()
