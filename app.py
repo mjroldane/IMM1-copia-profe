@@ -7,31 +7,49 @@ from langdetect import detect, DetectorFactory
 from PIL import Image
 import PyPDF2
 
-# Para que los resultados de detección sean consistentes
+# Configuración de consistencia para la detección
 DetectorFactory.seed = 0
 
 if not os.path.exists("temp"):
     os.makedirs("temp")
 
+# --- INTERFAZ PRINCIPAL ---
+st.set_page_config(page_title="Asistente de Voz Accesible", page_icon="🔊")
+
 st.title("🔊 Lector Inteligente Accesible")
 
+# Sección de información de idiomas permitidos
+with st.expander("🌐 Ver idiomas soportados", expanded=True):
+    st.markdown("""
+    Esta aplicación puede leer y detectar automáticamente los siguientes idiomas:
+    * **Español** (Castellano)
+    * **Inglés** (English)
+    * **Francés** (Français)
+    
+    *Nota: Si el sistema detecta otro idioma, intentará leerlo con la configuración en Español por defecto.*
+    """)
+
 with st.sidebar:
-    st.header("Configuración de Voz")
-    # Añadimos la opción de Autodetectar
+    st.header("Panel de Control")
     modo = st.selectbox(
-        "Idioma de lectura:",
-        ["Autodetectar", "Español", "English", "Français"]
+        "Preferencia de idioma:",
+        ["Autodetectar", "Español", "English", "Français"],
+        help="Selecciona 'Autodetectar' para que la IA identifique el idioma del texto por ti."
     )
     
-    mapa_idiomas = {
-        "Español": "es",
-        "English": "en",
-        "Français": "fr"
-    }
+    # Botón para limpiar todo
+    if st.button("🗑️ Limpiar Pantalla y Archivos"):
+        st.cache_data.clear()
+        st.rerun()
+
+    mapa_idiomas = {"Español": "es", "English": "en", "Français": "fr"}
 
 # --- ENTRADA DE DATOS ---
-uploaded_file = st.file_uploader("Sube un PDF o TXT", type=["pdf", "txt"])
-text_input = st.text_area("O pega el texto aquí:", height=150)
+st.subheader("1. Proporciona el texto")
+uploaded_file = st.file_uploader("Sube un archivo (PDF o TXT)", type=["pdf", "txt"])
+
+# Usamos una clave (key) para poder limpiar el text_area si fuera necesario
+text_input = st.text_area("O escribe/pega el texto aquí:", height=150, key="input_texto")
 
 final_text = ""
 if uploaded_file:
@@ -44,38 +62,40 @@ if uploaded_file:
 elif text_input:
     final_text = text_input
 
-# --- PROCESAMIENTO ---
-if st.button("🔊 GENERAR AUDIO", use_container_width=True):
+# --- BOTÓN DE ACCIÓN ---
+if st.button("🔊 CONVERTIR A VOZHORA", use_container_width=True):
     if final_text.strip():
-        # Lógica de detección de idioma
+        # Lógica de detección
         if modo == "Autodetectar":
             try:
                 lang_detected = detect(final_text)
-                # Validamos que el idioma detectado esté soportado por nuestra app
                 lg = lang_detected if lang_detected in ['es', 'en', 'fr'] else 'es'
-                nombre_idioma = "detectado automáticamente"
+                nombre_idioma = f"Detección automática: {lg.upper()}"
             except:
                 lg = 'es'
-                nombre_idioma = "por defecto (Español)"
+                nombre_idioma = "No detectado (usando Español)"
         else:
             lg = mapa_idiomas[modo]
             nombre_idioma = modo
 
-        with st.spinner(f"Procesando en idioma {nombre_idioma}..."):
+        with st.spinner(f"Preparando voz para {nombre_idioma}..."):
             tts = gTTS(final_text, lang=lg)
             nombre_archivo = f"temp/audio_{int(time.time())}.mp3"
             tts.save(nombre_archivo)
             
-            st.success(f"Audio listo (Idioma: {lg})")
+            st.success(f"✅ Lectura lista en {nombre_idioma}")
             with open(nombre_archivo, "rb") as f:
                 st.audio(f.read(), format="audio/mp3")
+                
+            # Opción de descarga accesible
+            st.download_button("📥 Descargar Audio", data=open(nombre_archivo, "rb"), file_name="mi_lectura.mp3")
     else:
-        st.error("No hay texto para leer.")
+        st.warning("⚠️ No se encontró texto para procesar. Por favor escribe algo o sube un archivo.")
 
-# Limpieza básica
+# Limpieza automática de archivos viejos
 def clean_temp():
-    files = glob.glob("temp/*.mp3")
-    for f in files:
-        if os.stat(f).st_mtime < time.time() - 3600: # Borra archivos de más de 1 hora
+    now = time.time()
+    for f in glob.glob("temp/*.mp3"):
+        if os.stat(f).st_mtime < now - 3600:
             os.remove(f)
 clean_temp()
