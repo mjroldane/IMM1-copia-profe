@@ -110,7 +110,7 @@ st.markdown(
     }
     /* Estilo para el área de texto */
     .stTextArea textarea {
-        background-color: #ffffff;
+        background-color: #e8f5e9;
         color: #000000;
     }
     </style>
